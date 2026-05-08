@@ -1,18 +1,109 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Playfair+Display:ital@1&display=swap");
 @import "tailwindcss";
+
+:root {
+  --bg: #f3f1ed;
+  --text: #1a1a1a;
+  --text-secondary: #666;
+  --text-muted: #999;
+  --border: rgba(0, 0, 0, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  background-color: #0a0a0f;
-  color: #d1d5db;
-  font-family: var(--font-inter), system-ui, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Monospace text */
+.mono {
+  font-family: "Geist Mono", monospace;
+}
+
+/* Section styles */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 48px 0 24px;
+}
+
+.section-label {
+  font-family: "Geist Mono", monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.section-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Project list styles */
+.project {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.project:last-child {
+  border-bottom: none;
+}
+
+.project h2 {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.project p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Contact block */
+.contact-block {
+  padding: 24px 0;
+}
+
+.contact-block p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.contact-links a {
+  font-family: "Geist Mono", monospace;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.contact-links a:hover {
+  color: var(--text);
 }
