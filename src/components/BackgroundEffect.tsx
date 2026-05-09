@@ -227,132 +227,161 @@ export default function BackgroundEffect() {
 
       #define PI 3.141592654
 
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-      }
+      mat2 m2 = mat2(1.6, 1.2, -1.2, 1.6);
+
+      float hash(float n) { return fract(sin(n) * 43758.5453); }
 
       float noise(vec2 p) {
         vec2 i = floor(p);
         vec2 f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
-        float a = hash(i);
-        float b = hash(i + vec2(1.0, 0.0));
-        float c = hash(i + vec2(0.0, 1.0));
-        float d = hash(i + vec2(1.0, 1.0));
-        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        float n = i.x + i.y * 57.0;
+        return mix(
+          mix(hash(n), hash(n + 1.0), f.x),
+          mix(hash(n + 57.0), hash(n + 58.0), f.x),
+          f.y
+        );
       }
 
       float fbm(vec2 p) {
         float f = 0.0;
-        f += 0.5 * noise(p); p *= 2.02;
-        f += 0.25 * noise(p); p *= 2.03;
-        f += 0.125 * noise(p); p *= 2.01;
+        f += 0.5000 * noise(p); p = m2 * p;
+        f += 0.2500 * noise(p); p = m2 * p;
+        f += 0.1250 * noise(p); p = m2 * p;
         f += 0.0625 * noise(p);
         return f / 0.9375;
       }
 
-      float waveHeight(vec2 p, float t) {
+      // Sea octave - smooth noise-based wave
+      float sea_octave(vec2 uv, float choppy) {
+        uv += noise(uv);
+        vec2 wv = 1.0 - abs(sin(uv));
+        vec2 swv = abs(cos(uv));
+        wv = mix(wv, swv, wv);
+        return pow(1.0 - pow(wv.x * wv.y, 0.65), choppy);
+      }
+
+      float sea(vec2 p, float t) {
+        float freq = 0.16;
+        float amp = 0.6;
+        float choppy = 4.0;
+        vec2 uv = p;
+        float d = 0.0;
         float h = 0.0;
-        h += sin(p.x * 3.0 + t * 0.7) * 0.15;
-        h += sin(p.x * 5.2 - t * 1.3) * 0.08;
-        h += sin(p.x * 7.8 + t * 0.9) * 0.04;
-        h += sin(p.y * 2.5 + t * 0.5) * 0.06;
-        h += sin(p.x * 12.0 + p.y * 8.0 + t * 1.2) * 0.03;
-        h += fbm(p * 2.0 + vec2(t * 0.2, 0.0)) * 0.2;
+        for (int i = 0; i < 5; i++) {
+          d = sea_octave((uv + t) * freq, choppy);
+          d += sea_octave((uv - t) * freq, choppy);
+          h += d * amp;
+          uv *= m2;
+          freq *= 1.9;
+          amp *= 0.22;
+          choppy = mix(choppy, 1.0, 0.2);
+        }
         return h;
+      }
+
+      // Map function for ray marching
+      float map(vec3 p, float t) {
+        return p.y - sea(p.xz, t);
+      }
+
+      // Map with detail for normals
+      float map_detailed(vec3 p, float t) {
+        return p.y - sea(p.xz, t);
+      }
+
+      vec3 getNormal(vec3 p, float t) {
+        vec3 n;
+        n.y = map_detailed(p, t);
+        n.x = map_detailed(vec3(p.x + 0.01, p.y, p.z), t) - n.y;
+        n.z = map_detailed(vec3(p.x, p.y, p.z + 0.01), t) - n.y;
+        n.y = 0.01;
+        return normalize(n);
+      }
+
+      float diffuse(vec3 n, vec3 l, float p) {
+        return pow(dot(n, l) * 0.4 + 0.6, p);
+      }
+
+      float specular(vec3 n, vec3 l, vec3 e, float s) {
+        float nrm = (s + 8.0) / (PI * 8.0);
+        return pow(max(dot(reflect(e, n), l), 0.0), s) * nrm;
+      }
+
+      vec3 getSkyColor(vec3 e) {
+        e.y = max(e.y, 0.0);
+        vec3 ret;
+        ret.x = pow(1.0 - e.y, 2.0);
+        ret.y = 1.0 - e.y;
+        ret.z = 0.6 + (1.0 - e.y) * 0.4;
+        return ret;
+      }
+
+      vec3 getSeaColor(vec3 p, vec3 n, vec3 l, vec3 eye, float dist) {
+        float fresnel = clamp(1.0 - dot(n, -eye), 0.0, 1.0);
+        fresnel = pow(fresnel, 3.0) * 0.5;
+
+        vec3 reflected = getSkyColor(reflect(eye, n));
+        vec3 refracted = vec3(0.0, 0.06, 0.12) + diffuse(n, l, 80.0) * vec3(0.05, 0.15, 0.25) * 0.12;
+
+        refracted += specular(n, l, eye, 60.0) * vec3(0.8, 0.9, 1.0);
+        refracted += specular(n, l, eye, 30.0) * vec3(0.5, 0.6, 0.7) * 0.5;
+
+        vec3 col = mix(refracted, reflected, fresnel);
+
+        float atten = max(1.0 - dist * 0.004, 0.0);
+        col += vec3(0.0, 0.08, 0.15) * (p.y - sea(p.xz, uTime)) * 0.4 * atten;
+
+        return col;
       }
 
       void main() {
         vec2 uv = gl_FragCoord.xy / uResolution.xy;
         float aspect = uResolution.x / uResolution.y;
-        vec2 p = uv * 2.0 - 1.0;
-        p.x *= aspect;
+        vec2 p = (uv * 2.0 - 1.0) * vec2(aspect, 1.0);
 
-        float t = uTime * 0.4;
+        float time = uTime * 0.3;
 
-        // Sun direction - from upper right
-        vec3 sunDir = normalize(vec3(0.6, 0.8, 0.2));
-        vec3 sunCol = vec3(1.0, 0.95, 0.8);
+        // Camera
+        vec3 ang = vec3(0.0, 0.15, 0.0);
+        vec3 ori = vec3(0.0, 3.5, 5.0);
+        vec3 dir = normalize(vec3(p.xy, -1.5));
 
-        // Sky - bright daytime
-        float skyY = uv.y;
-        vec3 skyTop = vec3(0.3, 0.55, 0.85);
-        vec3 skyBot = vec3(0.6, 0.75, 0.9);
-        vec3 sky = mix(skyBot, skyTop, smoothstep(0.0, 0.6, skyY));
+        // Ray march to sea
+        vec3 p3 = ori + dir * 3.0;
+        float dist = 0.0;
+        float h = 0.0;
+        float dh = 0.0;
 
-        // Sun glow in sky
-        vec2 sunPos = vec2(0.35, 0.65);
-        float sunDist = length(uv - sunPos);
-        float sunGlow = exp(-sunDist * sunDist * 6.0);
-        sky += sunCol * sunGlow * 0.5;
-        sky += vec3(1.0, 0.9, 0.7) * pow(max(1.0 - sunDist * 3.0, 0.0), 8.0) * 0.3;
+        for (int i = 0; i < 80; i++) {
+          h = map(p3, time);
+          if (h < 0.01 || dist > 80.0) break;
+          dist += h;
+          p3 = ori + dir * dist;
+        }
 
-        // Wave height for horizon
-        float waveH = waveHeight(p, t);
-        float horizon = 0.5 + waveH * 0.25;
+        vec3 lightDir = normalize(vec3(0.0, 1.0, 0.8));
 
-        // Distance from horizon (positive = below water)
-        float waterDist = horizon - uv.y;
+        vec3 col = vec3(0.0);
 
-        // Water depth gradient - bright daytime ocean
-        vec3 deepWater = vec3(0.0, 0.08, 0.18);
-        vec3 midWater = vec3(0.02, 0.15, 0.35);
-        vec3 shallowWater = vec3(0.05, 0.25, 0.5);
+        if (dist < 80.0) {
+          vec3 n = getNormal(p3, time);
+          col = getSeaColor(p3, n, lightDir, dir, dist);
 
-        vec3 waterCol = mix(shallowWater, midWater, smoothstep(0.0, 0.08, waterDist));
-        waterCol = mix(waterCol, deepWater, smoothstep(0.08, 0.25, waterDist));
+          // Horizon fog
+          col = mix(col, getSkyColor(dir), 1.0 - exp(-dist * dist * 0.0001));
+        } else {
+          col = getSkyColor(dir);
+        }
 
-        // Wave normals from height differences
-        float eps = 0.008;
-        float h = waveHeight(p, t);
-        float hx = waveHeight(p + vec2(eps, 0.0), t);
-        float hy = waveHeight(p + vec2(0.0, eps), t);
-        vec3 normal = normalize(vec3(h - hx, h - hy, eps));
+        // Sun
+        float sunDot = max(dot(dir, lightDir), 0.0);
+        col += vec3(1.0, 0.9, 0.7) * pow(sunDot, 8.0) * 0.3;
+        col += vec3(1.0, 0.85, 0.6) * pow(sunDot, 32.0) * 0.5;
 
-        // Fresnel - more reflection at shallow angles
-        float fresnel = pow(1.0 - smoothstep(0.3, 0.7, uv.y + waveH * 0.5), 3.0);
-
-        // Reflection of sky on water
-        vec3 reflSky = mix(skyBot, skyTop, smoothstep(0.0, 0.5, 1.0 - uv.y));
-        // Sun path on water
-        float sunPath = exp(-pow(uv.x - sunPos.x, 2.0) * 15.0) * exp(-(1.0 - uv.y) * 2.0);
-        reflSky += sunCol * sunPath * 0.3;
-
-        // Specular highlights - sharp sun glints
-        vec3 viewDir = vec3(0.0, 0.0, 1.0);
-        vec3 halfVec = normalize(sunDir + viewDir);
-        float spec = pow(max(dot(normal, halfVec), 0.0), 256.0);
-        float spec2 = pow(max(dot(normal, halfVec), 0.0), 64.0);
-        float specBroad = pow(max(dot(normal, halfVec), 0.0), 16.0);
-
-        // Combine water
-        waterCol = mix(waterCol, reflSky, fresnel * 0.5);
-        waterCol += sunCol * spec * 1.5;          // Sharp glints
-        waterCol += sunCol * spec2 * 0.6;         // Medium glints
-        waterCol += vec3(0.8, 0.85, 0.9) * specBroad * 0.3;  // Broad shimmer
-
-        // Subsurface scattering glow
-        float sss = pow(max(dot(viewDir, -sunDir), 0.0), 4.0) * smoothstep(0.0, 0.15, waterDist);
-        waterCol += vec3(0.1, 0.2, 0.3) * sss * 0.5;
-
-        // Horizon glow
-        float horizonGlow = exp(-waterDist * waterDist * 300.0) * 0.4;
-        waterCol += skyBot * horizonGlow;
-
-        // Foam on crests
-        float foam = smoothstep(0.45, 0.5, uv.y + waveH * 0.5) * (1.0 - smoothstep(0.5, 0.55, uv.y));
-        waterCol = mix(waterCol, vec3(0.85, 0.9, 0.95), foam * 0.4);
-
-        // Atmospheric haze/mist near horizon
-        float haze = exp(-waterDist * 8.0) * 0.15;
-        waterCol = mix(waterCol, sky, haze);
-
-        // Final composition
-        vec3 col = mix(waterCol, sky, smoothstep(horizon - 0.015, horizon + 0.015, uv.y));
-
-        // Vignette
-        vec2 v = uv - 0.5;
-        col *= 1.0 - dot(v, v) * 0.2;
+        // Tone mapping
+        col = pow(col, vec3(0.4545));
+        col = clamp(col, 0.0, 1.0);
 
         gl_FragColor = vec4(col, 1.0);
       }
