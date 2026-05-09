@@ -233,165 +233,187 @@ export default function BackgroundEffect() {
       uniform vec2 uResolution;
       uniform float uTime;
 
-      #define PI 3.141592654
+      #define DRAG_MULT 0.38
+      #define WATER_DEPTH 1.0
+      #define CAMERA_HEIGHT 1.5
+      #define ITERATIONS_RAYMARCH 12
+      #define ITERATIONS_NORMAL 36
 
-      mat2 m2 = mat2(1.6, 1.2, -1.2, 1.6);
+      vec2 wavedx(vec2 position, vec2 direction, float frequency, float timeshift) {
+        float x = dot(direction, position) * frequency + timeshift;
+        float wave = exp(sin(x) - 1.0);
+        float dx = wave * cos(x);
+        return vec2(wave, -dx);
+      }
 
-      float hash(float n) { return fract(sin(n) * 43758.5453); }
+      float getwaves_raymarch(vec2 position) {
+        float wavePhaseShift = length(position) * 0.1;
+        float iter = 0.0;
+        float frequency = 1.0;
+        float timeMultiplier = 2.0;
+        float weight = 1.0;
+        float sumOfValues = 0.0;
+        float sumOfWeights = 0.0;
+        for(int i=0; i < 12; i++) {
+          vec2 p = vec2(sin(iter), cos(iter));
+          vec2 res = wavedx(position, p, frequency, uTime * timeMultiplier + wavePhaseShift);
+          position += p * res.y * weight * DRAG_MULT;
+          sumOfValues += res.x * weight;
+          sumOfWeights += weight;
+          weight = mix(weight, 0.0, 0.2);
+          frequency *= 1.18;
+          timeMultiplier *= 1.07;
+          iter += 1232.399963;
+        }
+        return sumOfValues / sumOfWeights;
+      }
 
-      float noise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        float n = i.x + i.y * 57.0;
-        return mix(
-          mix(hash(n), hash(n + 1.0), f.x),
-          mix(hash(n + 57.0), hash(n + 58.0), f.x),
-          f.y
+      float getwaves_normal(vec2 position) {
+        float wavePhaseShift = length(position) * 0.1;
+        float iter = 0.0;
+        float frequency = 1.0;
+        float timeMultiplier = 2.0;
+        float weight = 1.0;
+        float sumOfValues = 0.0;
+        float sumOfWeights = 0.0;
+        for(int i=0; i < 36; i++) {
+          vec2 p = vec2(sin(iter), cos(iter));
+          vec2 res = wavedx(position, p, frequency, uTime * timeMultiplier + wavePhaseShift);
+          position += p * res.y * weight * DRAG_MULT;
+          sumOfValues += res.x * weight;
+          sumOfWeights += weight;
+          weight = mix(weight, 0.0, 0.2);
+          frequency *= 1.18;
+          timeMultiplier *= 1.07;
+          iter += 1232.399963;
+        }
+        return sumOfValues / sumOfWeights;
+      }
+
+      float raymarchwater(vec3 camera, vec3 start, vec3 end, float depth) {
+        vec3 pos = start;
+        vec3 dir = normalize(end - start);
+        for(int i=0; i < 64; i++) {
+          float height = getwaves_raymarch(pos.xz) * depth - depth;
+          if(height + 0.01 > pos.y) {
+            return distance(pos, camera);
+          }
+          pos += dir * (pos.y - height);
+        }
+        return distance(start, camera);
+      }
+
+      vec3 normal(vec2 pos, float e, float depth) {
+        vec2 ex = vec2(e, 0);
+        float H = getwaves_normal(pos.xy) * depth;
+        vec3 a = vec3(pos.x, H, pos.y);
+        return normalize(
+          cross(
+            a - vec3(pos.x - e, getwaves_normal(pos.xy - ex.xy) * depth, pos.y),
+            a - vec3(pos.x, getwaves_normal(pos.xy + ex.yx) * depth, pos.y + e)
+          )
         );
       }
 
-      float fbm(vec2 p) {
-        float f = 0.0;
-        f += 0.5000 * noise(p); p = m2 * p;
-        f += 0.2500 * noise(p); p = m2 * p;
-        f += 0.1250 * noise(p); p = m2 * p;
-        f += 0.0625 * noise(p);
-        return f / 0.9375;
+      mat3 createRotationMatrixAxisAngle(vec3 axis, float angle) {
+        float s = sin(angle);
+        float c = cos(angle);
+        float oc = 1.0 - c;
+        return mat3(
+          oc * axis.x * axis.x + c, oc * axis.x * axis.y - axis.z * s, oc * axis.z * axis.x + axis.y * s,
+          oc * axis.x * axis.y + axis.z * s, oc * axis.y * axis.y + c, oc * axis.y * axis.z - axis.x * s,
+          oc * axis.z * axis.x - axis.y * s, oc * axis.y * axis.z + axis.x * s, oc * axis.z * axis.z + c
+        );
       }
 
-      // Sea octave - smooth noise-based wave
-      float sea_octave(vec2 uv, float choppy) {
-        uv += noise(uv);
-        vec2 wv = 1.0 - abs(sin(uv));
-        vec2 swv = abs(cos(uv));
-        wv = mix(wv, swv, wv);
-        return pow(1.0 - pow(wv.x * wv.y, 0.65), choppy);
+      vec3 getRay(vec2 fragCoord) {
+        vec2 uv = ((fragCoord.xy / uResolution.xy) * 2.0 - 1.0) * vec2(uResolution.x / uResolution.y, 1.0);
+        vec3 proj = normalize(vec3(uv.x, uv.y, 1.5));
+        // Look downward to see water horizon
+        return createRotationMatrixAxisAngle(vec3(0.0, -1.0, 0.0), 0.0)
+          * createRotationMatrixAxisAngle(vec3(1.0, 0.0, 0.0), -1.0)
+          * proj;
       }
 
-      float sea(vec2 p, float t) {
-        float freq = 0.16;
-        float amp = 0.6;
-        float choppy = 4.0;
-        vec2 uv = p;
-        float d = 0.0;
-        float h = 0.0;
-        for (int i = 0; i < 5; i++) {
-          d = sea_octave((uv + t) * freq, choppy);
-          d += sea_octave((uv - t) * freq, choppy);
-          h += d * amp;
-          uv *= m2;
-          freq *= 1.9;
-          amp *= 0.22;
-          choppy = mix(choppy, 1.0, 0.2);
-        }
-        return h;
+      float intersectPlane(vec3 origin, vec3 direction, vec3 point, vec3 normal) {
+        return clamp(dot(point - origin, normal) / dot(direction, normal), -1.0, 9991999.0);
       }
 
-      // Map function for ray marching
-      float map(vec3 p, float t) {
-        return p.y - sea(p.xz, t);
+      vec3 extra_cheap_atmosphere(vec3 raydir, vec3 sundir) {
+        float special_trick = 1.0 / (raydir.y * 1.0 + 0.1);
+        float special_trick2 = 1.0 / (sundir.y * 11.0 + 1.0);
+        float raysundt = pow(abs(dot(sundir, raydir)), 2.0);
+        float sundt = pow(max(0.0, dot(sundir, raydir)), 8.0);
+        float mymie = sundt * special_trick * 0.2;
+        vec3 suncolor = mix(vec3(1.0), max(vec3(0.0), vec3(1.0) - vec3(5.5, 13.0, 22.4) / 22.4), special_trick2);
+        vec3 bluesky= vec3(5.5, 13.0, 22.4) / 22.4 * suncolor;
+        vec3 bluesky2 = max(vec3(0.0), bluesky - vec3(5.5, 13.0, 22.4) * 0.002 * (special_trick + -6.0 * sundir.y * sundir.y));
+        bluesky2 *= special_trick * (0.24 + raysundt * 0.24);
+        return bluesky2 * (1.0 + 1.0 * pow(1.0 - raydir.y, 3.0));
       }
 
-      // Map with detail for normals
-      float map_detailed(vec3 p, float t) {
-        return p.y - sea(p.xz, t);
+      vec3 getSunDirection() {
+        return normalize(vec3(-0.0773502691896258 , 0.5 + sin(uTime * 0.2 + 2.6) * 0.45 , 0.5773502691896258));
       }
 
-      vec3 getNormal(vec3 p, float t) {
-        vec3 n;
-        n.y = map_detailed(p, t);
-        n.x = map_detailed(vec3(p.x + 0.01, p.y, p.z), t) - n.y;
-        n.z = map_detailed(vec3(p.x, p.y, p.z + 0.01), t) - n.y;
-        n.y = 0.01;
-        return normalize(n);
+      vec3 getAtmosphere(vec3 dir) {
+         return extra_cheap_atmosphere(dir, getSunDirection()) * 0.5;
       }
 
-      float diffuse(vec3 n, vec3 l, float p) {
-        return pow(dot(n, l) * 0.4 + 0.6, p);
+      float getSun(vec3 dir) {
+        return pow(max(0.0, dot(dir, getSunDirection())), 720.0) * 210.0;
       }
 
-      float specular(vec3 n, vec3 l, vec3 e, float s) {
-        float nrm = (s + 8.0) / (PI * 8.0);
-        return pow(max(dot(reflect(e, n), l), 0.0), s) * nrm;
-      }
-
-      vec3 getSkyColor(vec3 e) {
-        e.y = max(e.y, 0.0);
-        vec3 ret;
-        ret.x = pow(1.0 - e.y, 2.0);
-        ret.y = 1.0 - e.y;
-        ret.z = 0.6 + (1.0 - e.y) * 0.4;
-        return ret;
-      }
-
-      vec3 getSeaColor(vec3 p, vec3 n, vec3 l, vec3 eye, float dist) {
-        float fresnel = clamp(1.0 - dot(n, -eye), 0.0, 1.0);
-        fresnel = pow(fresnel, 3.0) * 0.5;
-
-        vec3 reflected = getSkyColor(reflect(eye, n));
-        vec3 refracted = vec3(0.0, 0.06, 0.12) + diffuse(n, l, 80.0) * vec3(0.05, 0.15, 0.25) * 0.12;
-
-        refracted += specular(n, l, eye, 60.0) * vec3(0.8, 0.9, 1.0);
-        refracted += specular(n, l, eye, 30.0) * vec3(0.5, 0.6, 0.7) * 0.5;
-
-        vec3 col = mix(refracted, reflected, fresnel);
-
-        float atten = max(1.0 - dist * 0.004, 0.0);
-        col += vec3(0.0, 0.08, 0.15) * (p.y - sea(p.xz, uTime)) * 0.4 * atten;
-
-        return col;
+      vec3 aces_tonemap(vec3 color) {
+        mat3 m1 = mat3(
+          0.59719, 0.07600, 0.02840,
+          0.35458, 0.90834, 0.13383,
+          0.04823, 0.01566, 0.83777
+        );
+        mat3 m2 = mat3(
+          1.60475, -0.10208, -0.00327,
+          -0.53108,  1.10813, -0.07276,
+          -0.07367, -0.00605,  1.07602
+        );
+        vec3 v = m1 * color;
+        vec3 a = v * (v + 0.0245786) - 0.000090537;
+        vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+        return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));
       }
 
       void main() {
-        vec2 uv = gl_FragCoord.xy / uResolution.xy;
-        float aspect = uResolution.x / uResolution.y;
-        vec2 p = (uv * 2.0 - 1.0) * vec2(aspect, 1.0);
-
-        float time = uTime * 0.3;
-
-        // Camera
-        vec3 ang = vec3(0.0, 0.15, 0.0);
-        vec3 ori = vec3(0.0, 3.5, 5.0);
-        vec3 dir = normalize(vec3(p.xy, -1.5));
-
-        // Ray march to sea
-        vec3 p3 = ori + dir * 3.0;
-        float dist = 0.0;
-        float h = 0.0;
-        float dh = 0.0;
-
-        for (int i = 0; i < 80; i++) {
-          h = map(p3, time);
-          if (h < 0.01 || dist > 80.0) break;
-          dist += h;
-          p3 = ori + dir * dist;
+        vec3 ray = getRay(gl_FragCoord.xy);
+        if(ray.y >= 0.0) {
+          vec3 C = getAtmosphere(ray) + getSun(ray);
+          gl_FragColor = vec4(aces_tonemap(C * 2.0), 1.0);
+          return;
         }
 
-        vec3 lightDir = normalize(vec3(0.0, 1.0, 0.8));
+        vec3 waterPlaneHigh = vec3(0.0, 0.0, 0.0);
+        vec3 waterPlaneLow = vec3(0.0, -WATER_DEPTH, 0.0);
+        vec3 origin = vec3(uTime * 0.2, CAMERA_HEIGHT, 1.0);
 
-        vec3 col = vec3(0.0);
+        float highPlaneHit = intersectPlane(origin, ray, waterPlaneHigh, vec3(0.0, 1.0, 0.0));
+        float lowPlaneHit = intersectPlane(origin, ray, waterPlaneLow, vec3(0.0, 1.0, 0.0));
+        vec3 highHitPos = origin + ray * highPlaneHit;
+        vec3 lowHitPos = origin + ray * lowPlaneHit;
 
-        if (dist < 80.0) {
-          vec3 n = getNormal(p3, time);
-          col = getSeaColor(p3, n, lightDir, dir, dist);
+        float dist = raymarchwater(origin, highHitPos, lowHitPos, WATER_DEPTH);
+        vec3 waterHitPos = origin + ray * dist;
 
-          // Horizon fog
-          col = mix(col, getSkyColor(dir), 1.0 - exp(-dist * dist * 0.0001));
-        } else {
-          col = getSkyColor(dir);
-        }
+        vec3 N = normal(waterHitPos.xz, 0.01, WATER_DEPTH);
+        N = mix(N, vec3(0.0, 1.0, 0.0), 0.8 * min(1.0, sqrt(dist*0.01) * 1.1));
 
-        // Sun
-        float sunDot = max(dot(dir, lightDir), 0.0);
-        col += vec3(1.0, 0.9, 0.7) * pow(sunDot, 8.0) * 0.3;
-        col += vec3(1.0, 0.85, 0.6) * pow(sunDot, 32.0) * 0.5;
+        float fresnel = (0.04 + (1.0-0.04)*(pow(1.0 - max(0.0, dot(-N, ray)), 5.0)));
 
-        // Tone mapping
-        col = pow(col, vec3(0.4545));
-        col = clamp(col, 0.0, 1.0);
+        vec3 R = normalize(reflect(ray, N));
+        R.y = abs(R.y);
 
-        gl_FragColor = vec4(col, 1.0);
+        vec3 reflection = getAtmosphere(R) + getSun(R);
+        vec3 scattering = vec3(0.0293, 0.0698, 0.1717) * 0.1 * (0.2 + (waterHitPos.y + WATER_DEPTH) / WATER_DEPTH);
+
+        vec3 C = fresnel * reflection + scattering;
+        gl_FragColor = vec4(aces_tonemap(C * 2.0), 1.0);
       }
     `;
 
