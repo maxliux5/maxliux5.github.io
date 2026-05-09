@@ -1,12 +1,78 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Playfair+Display:ital@1&family=Sora:wght@300;400;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 
 :root {
   --bg: #02070a;
-  --text: rgba(244, 250, 255, 0.94);
-  --text-secondary: rgba(224, 235, 241, 0.62);
-  --text-muted: rgba(224, 235, 241, 0.38);
-  --border: rgba(255, 255, 255, 0.08);
+  --text-main: rgba(248, 250, 252, 0.97);
+  --text-soft: rgba(211, 222, 235, 0.88);
+  --text-muted: rgba(157, 174, 194, 0.78);
+  --text-faint: rgba(137, 151, 169, 0.62);
+  --accent: #ffb86b;
+  --accent-rgb: 255, 184, 107;
+  --border: rgba(255, 255, 255, 0.16);
+  --rule: rgba(210, 229, 255, 0.12);
+  --panel-bg: rgba(7, 13, 21, 0.73);
+  --panel-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+  --panel-sheen: radial-gradient(circle at 55% 12%, rgba(136, 182, 255, 0.16), transparent 32%);
+  --panel-side-shade: linear-gradient(90deg, rgba(2, 6, 12, 0.3), transparent 36%, rgba(2, 6, 12, 0.28));
+  --panel-shadow: 0 26px 70px rgba(0, 0, 0, 0.42), 0 2px 18px rgba(8, 18, 34, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 10px 26px rgba(0, 0, 0, 0.38);
+  --hero-weight: 800;
+  --project-weight: 700;
+}
+
+:root[data-effect="stars"] {
+  --text-main: rgba(252, 253, 255, 0.98);
+  --text-soft: rgba(217, 226, 246, 0.9);
+  --text-muted: rgba(158, 174, 207, 0.8);
+  --text-faint: rgba(135, 151, 184, 0.64);
+  --accent: #ffd28a;
+  --accent-rgb: 255, 210, 138;
+  --border: rgba(194, 212, 255, 0.2);
+  --rule: rgba(180, 202, 255, 0.16);
+  --panel-bg: rgba(8, 12, 24, 0.7);
+  --panel-gloss: linear-gradient(180deg, rgba(218, 230, 255, 0.08), rgba(115, 136, 190, 0.028));
+  --panel-sheen: radial-gradient(circle at 62% 9%, rgba(170, 199, 255, 0.18), transparent 30%);
+  --panel-side-shade: linear-gradient(90deg, rgba(2, 4, 12, 0.32), transparent 42%, rgba(8, 10, 22, 0.24));
+  --panel-shadow: 0 28px 86px rgba(0, 0, 0, 0.48), 0 0 46px rgba(90, 125, 210, 0.12), inset 0 1px 0 rgba(238, 246, 255, 0.16);
+  --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72), 0 0 24px rgba(109, 146, 255, 0.2);
+  --hero-weight: 800;
+  --project-weight: 720;
+}
+
+:root[data-effect="seascape"] {
+  --text-main: rgba(248, 252, 255, 0.98);
+  --text-soft: rgba(220, 235, 244, 0.9);
+  --text-muted: rgba(162, 190, 204, 0.82);
+  --text-faint: rgba(130, 158, 174, 0.66);
+  --accent: #8be9d4;
+  --accent-rgb: 139, 233, 212;
+  --border: rgba(214, 242, 248, 0.24);
+  --rule: rgba(192, 232, 240, 0.18);
+  --panel-bg: rgba(5, 19, 30, 0.82);
+  --panel-gloss: linear-gradient(180deg, rgba(231, 249, 255, 0.07), rgba(104, 168, 190, 0.025));
+  --panel-sheen: radial-gradient(circle at 44% 4%, rgba(184, 227, 255, 0.16), transparent 34%);
+  --panel-side-shade: linear-gradient(180deg, rgba(4, 14, 22, 0.08), rgba(2, 8, 14, 0.5) 58%, rgba(1, 6, 10, 0.74));
+  --panel-shadow: 0 30px 86px rgba(0, 20, 34, 0.48), 0 0 42px rgba(111, 196, 210, 0.16), inset 0 1px 0 rgba(236, 252, 255, 0.16);
+  --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.66), 0 8px 22px rgba(0, 18, 28, 0.4);
+  --hero-weight: 760;
+  --project-weight: 680;
+}
+
+:root[data-effect="saturn"] {
+  --text-main: rgba(255, 250, 242, 0.98);
+  --text-soft: rgba(238, 226, 210, 0.88);
+  --text-muted: rgba(199, 177, 146, 0.78);
+  --text-faint: rgba(165, 143, 116, 0.64);
+  --accent: #f4b66f;
+  --accent-rgb: 244, 182, 111;
+  --border: rgba(255, 213, 160, 0.2);
+  --rule: rgba(255, 211, 156, 0.15);
+  --panel-bg: rgba(16, 11, 10, 0.74);
+  --panel-gloss: linear-gradient(180deg, rgba(255, 229, 190, 0.075), rgba(145, 91, 50, 0.03));
+  --panel-sheen: radial-gradient(circle at 52% 10%, rgba(255, 189, 116, 0.13), transparent 32%);
+  --panel-side-shade: linear-gradient(90deg, rgba(11, 7, 7, 0.32), transparent 38%, rgba(15, 9, 8, 0.28));
+  --panel-shadow: 0 28px 80px rgba(0, 0, 0, 0.48), 0 0 42px rgba(207, 124, 56, 0.12), inset 0 1px 0 rgba(255, 231, 198, 0.15);
 }
 
 * {
@@ -21,16 +87,18 @@ html {
 
 body {
   background-color: var(--bg);
-  color: var(--text);
+  color: var(--text-main);
   font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background-color: rgba(255, 255, 255, 0.1);
+  color: #081018;
+  background-color: rgba(var(--accent-rgb), 0.82);
 }
 
 a {
@@ -50,22 +118,127 @@ a {
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  padding: 28px clamp(16px, 4vw, 60px) 34px;
+  padding: 24px clamp(16px, 4vw, 60px) 36px;
 }
 
 /* Glass content panel */
 .glass-content {
+  position: relative;
+  isolation: isolate;
   width: 100%;
-  max-width: 42rem;
-  padding: clamp(24px, 3.2vw, 38px);
-  border-radius: 34px;
-  background: linear-gradient(180deg, rgba(244, 251, 255, 0.12), rgba(244, 251, 255, 0.05)), rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: rgba(244, 250, 255, 0.94);
+  max-width: 43.5rem;
+  padding: clamp(28px, 3.6vw, 44px);
+  overflow: hidden;
+  border-radius: 30px;
+  background:
+    var(--panel-gloss),
+    var(--panel-bg);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(26px) saturate(118%);
+  -webkit-backdrop-filter: blur(26px) saturate(118%);
+  box-shadow: var(--panel-shadow);
+  color: var(--text-main);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-shadow: var(--text-shadow);
+  transition: background 360ms ease, border-color 360ms ease, box-shadow 360ms ease;
+}
+
+.glass-content::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background:
+    var(--panel-sheen),
+    var(--panel-side-shade),
+    rgba(6, 10, 16, 0.18);
+  pointer-events: none;
+  transition: background 360ms ease;
+}
+
+.glass-content > * {
+  position: relative;
+  z-index: 1;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-family: "Geist Mono", monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.date-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 1px 7px 2px;
+  color: #f8fafc;
+  background: rgba(0, 0, 0, 0.58);
+  border: 1px solid rgba(var(--accent-rgb), 0.16);
+  border-radius: 4px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.26), 0 0 18px rgba(var(--accent-rgb), 0.06);
+}
+
+.hero-copy {
+  max-width: 35rem;
+  margin-bottom: 34px;
+}
+
+.hero-copy h1 {
+  margin-bottom: 10px;
+  color: var(--text-main);
+  font-family: "Manrope", "Inter", system-ui, sans-serif;
+  font-size: clamp(2rem, 3.8vw, 2.65rem);
+  font-weight: var(--hero-weight);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.hero-copy p {
+  max-width: 34rem;
+  margin-bottom: 18px;
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.72;
+}
+
+.social-links {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.social-links a,
+.project a,
+.contact-links a {
+  text-decoration-line: underline;
+  text-decoration-color: rgba(var(--accent-rgb), 0.48);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition: color 180ms ease, text-decoration-color 180ms ease;
+}
+
+.social-links a:hover,
+.project a:hover,
+.contact-links a:hover {
+  color: var(--accent);
+  text-decoration-color: rgba(var(--accent-rgb), 0.92);
 }
 
 /* Section styles */
@@ -73,64 +246,112 @@ a {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: 48px 0 24px;
+  margin: 48px 0 20px;
 }
 
 .section-label {
   font-family: "Geist Mono", monospace;
   font-size: 12px;
-  font-weight: 500;
-  color: rgba(224, 235, 241, 0.62);
+  font-weight: 600;
+  color: var(--text-muted);
   white-space: nowrap;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
 }
 
 .section-rule {
   flex: 1;
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(90deg, var(--rule), transparent);
 }
 
 /* Project list styles */
 .project {
-  padding: 16px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 17px 0 18px;
+  border-bottom: 1px solid var(--rule);
 }
 
 .project:last-child {
   border-bottom: none;
 }
 
-.project h2 {
-  font-weight: 600;
-  margin-bottom: 4px;
+.project a {
+  color: var(--text-main);
+  font-family: "Manrope", "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: var(--project-weight);
+  line-height: 1.35;
 }
 
 .project p {
-  color: rgba(224, 235, 241, 0.62);
-  font-size: 13px;
-  line-height: 1.5;
+  max-width: 35rem;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
 }
 
 /* Contact block */
 .contact-block {
-  padding: 24px 0;
+  padding: 18px 0 4px;
 }
 
 .contact-block p {
-  color: rgba(224, 235, 241, 0.62);
-  font-size: 13px;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 500;
   margin-bottom: 12px;
 }
 
 .contact-links a {
   font-family: "Geist Mono", monospace;
   font-size: 13px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  color: rgba(244, 250, 255, 0.62);
+  color: var(--text-muted);
 }
 
-.contact-links a:hover {
-  color: rgba(244, 250, 255, 0.94);
+footer {
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--rule);
+}
+
+footer p {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: 14px 12px 24px;
+  }
+
+  .glass-content {
+    padding: 24px 22px 28px;
+    border-radius: 24px;
+    background:
+      var(--panel-gloss),
+      color-mix(in srgb, var(--panel-bg), #02070a 16%);
+  }
+
+  .top-bar {
+    margin-bottom: 32px;
+  }
+
+  .eyebrow {
+    flex-wrap: wrap;
+  }
+
+  .hero-copy h1 {
+    font-size: 2.05rem;
+  }
+
+  .hero-copy p,
+  .project p,
+  .contact-block p {
+    font-size: 13.5px;
+  }
+
+  .section-header {
+    margin-top: 42px;
+  }
 }
