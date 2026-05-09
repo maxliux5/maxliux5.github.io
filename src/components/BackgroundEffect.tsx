@@ -353,23 +353,48 @@ export default function BackgroundEffect() {
       #define PI 3.141592654
       #define TAU 6.283185307
 
-      vec2 SaturnDef(vec2 p, float r) {
-        vec2 sp = vec2(atan(p.y, p.x), length(p));
-        sp.x += 0.003 * sin(sp.y * 30.0 - uTime);
-        sp.x += 0.001 * sin(sp.y * 50.0 + uTime * 0.5);
-        return vec2(sp.x / TAU + 0.5, sp.y - r);
-      }
+      // Hash functions
+      float hash(float n) { return fract(sin(n) * 43758.5453); }
+      float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
-      vec4 ringColor(vec2 uv, vec2 uvRing, vec2 dir) {
-        float r = uvRing.y;
-        float brightness = 0.5 + 0.5 * sin(uvRing.x * TAU * 100.0);
-        float innerRings = sin(r * 80.0) * 0.5 + 0.5;
-        float outerDetail = sin(r * 200.0) * 0.3 + 0.7;
-        vec3 ringCol = vec3(0.85, 0.75, 0.6) * brightness * innerRings * outerDetail;
-        float tilt = 0.004 / r;
-        float angle = atan(uv.y - 0.5, uv.x - 0.5);
-        ringCol *= 1.0 + 0.3 * sin(angle * 3.0 + r * 50.0);
-        return vec4(ringCol, smoothstep(-0.1, 0.0, -abs(uvRing.y)));
+      vec3 saturnColor(vec2 p, vec2 uv) {
+        vec2 sp = vec2(atan(p.y, p.x), length(p));
+
+        // Ring density and structure
+        float r = sp.y;
+        float ringPattern = sin(r * 150.0) * 0.15 + 0.85;
+        ringPattern *= sin(r * 80.0 + 1.0) * 0.2 + 0.8;
+        ringPattern *= sin(r * 40.0 - 2.0) * 0.1 + 0.9;
+
+        // Cassini division
+        float cassini = smoothstep(0.0, 0.02, abs(r - 0.52));
+
+        // Color gradient
+        vec3 innerCol = vec3(0.95, 0.85, 0.7);
+        vec3 outerCol = vec3(0.75, 0.65, 0.55);
+        vec3 col = mix(innerCol, outerCol, (r - 0.42) / 0.38);
+
+        // Ring shading - light from upper left
+        vec3 lightDir = normalize(vec3(-0.5, 1.0, 0.3));
+        vec3 ringNorm = vec3(0.0, 0.0, 1.0);
+        float ringShade = max(dot(ringNorm, lightDir), 0.0) * 0.7 + 0.3;
+        col *= ringShade * ringPattern * cassini;
+
+        // Ring texture variation
+        float tex = hash2(floor(uv * 200.0)) * 0.3 + 0.7;
+        col *= tex;
+
+        // Outer ring fade
+        col *= smoothstep(0.8, 0.45, r);
+
+        // Inner ring edge
+        col *= smoothstep(0.42, 0.44, r);
+
+        // Alpha
+        float alpha = smoothstep(0.42, 0.44, r) * smoothstep(0.82, 0.78, r);
+        alpha *= cassini;
+
+        return col * alpha;
       }
 
       void main() {
@@ -377,72 +402,115 @@ export default function BackgroundEffect() {
         vec2 p = -1.0 + 2.0 * q;
         p.x *= uResolution.x / uResolution.y;
 
+        // Sun direction - from upper right
+        vec3 sunDir = normalize(vec3(0.8, 0.6, 0.5));
+        vec3 sunCol = vec3(1.0, 0.85, 0.6);
+
+        // Camera setup
+        vec3 ro = vec3(0.0, 0.0, -2.5);
+        vec3 rd = normalize(vec3(p, 1.5));
+
         vec3 col = vec3(0.0);
 
-        // Planet
-        vec2 pPlanet = p - vec2(0.0, 0.05);
-        float rPlanet = 0.35;
-        float dPlanet = length(pPlanet) - rPlanet;
+        // Planet center
+        vec3 planetCenter = vec3(0.0, 0.0, 0.0);
+        float planetRadius = 0.4;
 
-        // Rings
-        vec2 pRing = p - vec2(0.0, 0.0);
-        vec2 ringUV = SaturnDef(pRing, 0.5);
-        float ringInner = 0.45;
-        float ringOuter = 0.8;
-        float dRing = 0.0;
+        // Ring system
+        float ringInner = 0.5;
+        float ringOuter = 0.85;
 
-        // Ring gap
-        float cassini = 1.0 - smoothstep(0.0, 0.01, abs(ringUV.y - 0.01));
+        // Ray-plane intersection for rings (y = 0 plane)
+        float t = -ro.y / rd.y;
+        vec3 ringHit = ro + rd * t;
 
-        // Ring front/back
-        float ringFront = smoothstep(-0.02, 0.02, pRing.y);
+        // Check if ray hits ring plane
+        if (t > 0.0) {
+          float ringDist = length(ringHit.xz);
+          if (ringDist > planetRadius * 1.1 && ringDist < ringOuter) {
+            // Ring coordinate
+            float ringAngle = atan(ringHit.z, ringHit.x);
+            float ringRadius = ringDist;
 
-        // Planet surface
-        if (dPlanet < 0.0) {
-          vec2 uvSphere = pPlanet / rPlanet;
-          float lat = asin(uvSphere.y);
-          float lon = atan(uvSphere.z, uvSphere.x);
-          vec3 surfCol = vec3(0.0);
+            // Ring shading
+            vec3 ringNorm = vec3(0.0, 1.0, 0.0);
+            float ringShade = max(dot(ringNorm, sunDir), 0.0);
+            ringShade = 0.3 + 0.7 * ringShade;
 
-          // Banded atmosphere
-          float bands = sin(lat * 30.0 + uTime * 0.1) * 0.5 + 0.5;
-          surfCol = mix(vec3(0.55, 0.45, 0.35), vec3(0.75, 0.65, 0.55), bands);
+            // Ring color
+            vec3 ringBaseCol = saturnColor(ringHit.xz, q);
+
+            // Ring depth fade
+            float depthFade = exp(-ringDist * 0.5);
+
+            // Mix ring color
+            col = ringBaseCol * ringShade * depthFade;
+          }
+        }
+
+        // Ray-sphere intersection for planet
+        vec3 oc = ro - planetCenter;
+        float b = dot(oc, rd);
+        float c = dot(oc, oc) - planetRadius * planetRadius;
+        float h = b * b - c;
+
+        if (h > 0.0) {
+          float tPlanet = -b - sqrt(h);
+          vec3 pos = ro + rd * tPlanet;
+          vec3 norm = normalize(pos - planetCenter);
+
+          // Latitude/longitude
+          float lat = asin(norm.y);
+          float lon = atan(norm.z, norm.x);
+
+          // Atmosphere bands
+          float bands = sin(lat * 25.0 + 0.5) * 0.5 + 0.5;
+          bands += sin(lat * 12.0 - 1.0) * 0.3;
+
+          vec3 planetBase = mix(vec3(0.85, 0.75, 0.6), vec3(0.95, 0.85, 0.7), bands);
 
           // Polar regions
-          float polar = smoothstep(0.6, 0.9, abs(uvSphere.y));
-          surfCol = mix(surfCol, vec3(0.8, 0.75, 0.7), polar * 0.5);
+          float polar = smoothstep(0.5, 0.8, abs(norm.y));
+          planetBase = mix(planetBase, vec3(0.9, 0.85, 0.8), polar * 0.4);
 
-          // Limb darkening
-          float limb = 1.0 - smoothstep(0.7, 1.0, length(uvSphere.xy));
-          surfCol *= 0.7 + 0.3 * limb;
+          // Lighting
+          float diff = max(dot(norm, sunDir), 0.0);
+          float ambient = 0.15;
 
-          col = surfCol;
+          // Limb darkening (fresnel effect)
+          float fresnel = pow(1.0 - max(dot(norm, -rd), 0.0), 3.0);
+          float limb = 1.0 - fresnel * 0.6;
+
+          // Specular on atmosphere
+          vec3 halfVec = normalize(sunDir - rd);
+          float spec = pow(max(dot(norm, halfVec), 0.0), 32.0) * 0.3;
+
+          col = planetBase * (ambient + diff * 0.85) * limb;
+          col += sunCol * spec;
+
+          // Atmosphere rim glow
+          float rim = pow(1.0 - max(dot(norm, -rd), 0.0), 4.0);
+          col += sunCol * rim * 0.15;
         }
 
-        // Rings in front
-        if (ringFront > 0.5) {
-          float ringR = length(pRing);
-          if (ringR > ringInner && ringR < ringOuter) {
-            vec4 rc = ringColor(q, SaturnDef(pRing, 0.6), normalize(pRing));
-            col = mix(col, rc.rgb, rc.a * (1.0 - smoothstep(ringInner, ringInner + 0.02, ringR)));
-          }
+        // Ring in front of planet (upper half)
+        if (p.y > 0.0 && length(p) < ringOuter && length(p) > ringInner) {
+          float ringR = length(p);
+          vec3 ringCol = saturnColor(p * (ringR / length(p)), q);
+
+          // Ring shading
+          float ringShade = 0.3 + 0.7 * max(dot(vec3(0.0, 1.0, 0.0), sunDir), 0.0);
+          col = ringCol * ringShade;
         }
 
-        // Rings behind
-        if (ringFront < 0.5) {
-          float ringR = length(pRing);
-          if (ringR > ringInner && ringR < ringOuter) {
-            vec4 rc = ringColor(q, SaturnDef(pRing, 0.6), normalize(pRing));
-            float ringAlpha = rc.a * cassini * 0.6;
-            col = mix(col, rc.rgb * 0.8, ringAlpha);
-          }
-        }
+        // Background glow
+        float bgGlow = exp(-length(p) * 1.5) * 0.1;
+        col += sunCol * bgGlow;
 
-        // Subtle glow
-        float glow = exp(-length(p - vec2(0.0, 0.05)) * 2.0) * 0.15;
-        col += vec3(0.9, 0.7, 0.5) * glow;
+        // Tone mapping
+        col = pow(col, vec3(0.4545));
+        col = clamp(col, 0.0, 1.0);
 
-        col = sqrt(col);
         gl_FragColor = vec4(col, 1.0);
       }
     `;
