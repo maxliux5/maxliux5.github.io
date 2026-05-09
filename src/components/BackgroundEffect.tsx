@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import styles from "./BackgroundEffect.module.css";
 
-type EffectType = "rain" | "stars" | "seascape";
+type EffectType = "rain" | "stars" | "seascape" | "saturn";
 
 export default function BackgroundEffect() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -345,6 +345,108 @@ export default function BackgroundEffect() {
       }
     `;
 
+    const saturnFragmentSource = `
+      precision highp float;
+      uniform vec2 uResolution;
+      uniform float uTime;
+
+      #define PI 3.141592654
+      #define TAU 6.283185307
+
+      vec2 SaturnDef(vec2 p, float r) {
+        vec2 sp = vec2(atan(p.y, p.x), length(p));
+        sp.x += 0.003 * sin(sp.y * 30.0 - uTime);
+        sp.x += 0.001 * sin(sp.y * 50.0 + uTime * 0.5);
+        return vec2(sp.x / TAU + 0.5, sp.y - r);
+      }
+
+      vec4 ringColor(vec2 uv, vec2 uvRing, vec2 dir) {
+        float r = uvRing.y;
+        float brightness = 0.5 + 0.5 * sin(uvRing.x * TAU * 100.0);
+        float innerRings = sin(r * 80.0) * 0.5 + 0.5;
+        float outerDetail = sin(r * 200.0) * 0.3 + 0.7;
+        vec3 ringCol = vec3(0.85, 0.75, 0.6) * brightness * innerRings * outerDetail;
+        float tilt = 0.004 / r;
+        float angle = atan(uv.y - 0.5, uv.x - 0.5);
+        ringCol *= 1.0 + 0.3 * sin(angle * 3.0 + r * 50.0);
+        return vec4(ringCol, smoothstep(-0.1, 0.0, -abs(uvRing.y)));
+      }
+
+      void main() {
+        vec2 q = gl_FragCoord.xy / uResolution.xy;
+        vec2 p = -1.0 + 2.0 * q;
+        p.x *= uResolution.x / uResolution.y;
+
+        vec3 col = vec3(0.0);
+
+        // Planet
+        vec2 pPlanet = p - vec2(0.0, 0.05);
+        float rPlanet = 0.35;
+        float dPlanet = length(pPlanet) - rPlanet;
+
+        // Rings
+        vec2 pRing = p - vec2(0.0, 0.0);
+        vec2 ringUV = SaturnDef(pRing, 0.5);
+        float ringInner = 0.45;
+        float ringOuter = 0.8;
+        float dRing = 0.0;
+
+        // Ring gap
+        float cassini = 1.0 - smoothstep(0.0, 0.01, abs(ringUV.y - 0.01));
+
+        // Ring front/back
+        float ringFront = smoothstep(-0.02, 0.02, pRing.y);
+
+        // Planet surface
+        if (dPlanet < 0.0) {
+          vec2 uvSphere = pPlanet / rPlanet;
+          float lat = asin(uvSphere.y);
+          float lon = atan(uvSphere.z, uvSphere.x);
+          vec3 surfCol = vec3(0.0);
+
+          // Banded atmosphere
+          float bands = sin(lat * 30.0 + uTime * 0.1) * 0.5 + 0.5;
+          surfCol = mix(vec3(0.55, 0.45, 0.35), vec3(0.75, 0.65, 0.55), bands);
+
+          // Polar regions
+          float polar = smoothstep(0.6, 0.9, abs(uvSphere.y));
+          surfCol = mix(surfCol, vec3(0.8, 0.75, 0.7), polar * 0.5);
+
+          // Limb darkening
+          float limb = 1.0 - smoothstep(0.7, 1.0, length(uvSphere.xy));
+          surfCol *= 0.7 + 0.3 * limb;
+
+          col = surfCol;
+        }
+
+        // Rings in front
+        if (ringFront > 0.5) {
+          float ringR = length(pRing);
+          if (ringR > ringInner && ringR < ringOuter) {
+            vec4 rc = ringColor(q, SaturnDef(pRing, 0.6), normalize(pRing));
+            col = mix(col, rc.rgb, rc.a * (1.0 - smoothstep(ringInner, ringInner + 0.02, ringR)));
+          }
+        }
+
+        // Rings behind
+        if (ringFront < 0.5) {
+          float ringR = length(pRing);
+          if (ringR > ringInner && ringR < ringOuter) {
+            vec4 rc = ringColor(q, SaturnDef(pRing, 0.6), normalize(pRing));
+            float ringAlpha = rc.a * cassini * 0.6;
+            col = mix(col, rc.rgb * 0.8, ringAlpha);
+          }
+        }
+
+        // Subtle glow
+        float glow = exp(-length(p - vec2(0.0, 0.05)) * 2.0) * 0.15;
+        col += vec3(0.9, 0.7, 0.5) * glow;
+
+        col = sqrt(col);
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
     let program: WebGLProgram | null = null;
     let start = performance.now();
     let rainIntensity = 1.08;
@@ -400,6 +502,7 @@ export default function BackgroundEffect() {
         case "rain": return rainSceneFragmentSource;
         case "stars": return starNestFragmentSource;
         case "seascape": return seascapeFragmentSource;
+        case "saturn": return saturnFragmentSource;
       }
     }
 
@@ -448,9 +551,9 @@ export default function BackgroundEffect() {
       <div className={styles.grain} />
       <button
         className={styles.toggleBtn}
-        onClick={() => setEffect(e => e === "rain" ? "stars" : e === "stars" ? "seascape" : "rain")}
+        onClick={() => setEffect(e => e === "rain" ? "stars" : e === "stars" ? "seascape" : e === "seascape" ? "saturn" : "rain")}
       >
-        {effect === "rain" ? "Stars" : effect === "stars" ? "Seascape" : "Rain"}
+        {effect === "rain" ? "Stars" : effect === "stars" ? "Seascape" : effect === "seascape" ? "Saturn" : "Rain"}
       </button>
     </>
   );
