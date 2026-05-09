@@ -225,23 +225,119 @@ export default function BackgroundEffect() {
       uniform vec2 uResolution;
       uniform float uTime;
 
+      // Fast noise for wave displacement
+      vec2 hash22(vec2 p) {
+        p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+        return fract(sin(p) * 43758.5453);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = dot(hash22(i), f);
+        float b = dot(hash22(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));
+        float c = dot(hash22(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));
+        float d = dot(hash22(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      float fbm(vec2 p) {
+        float f = 0.0;
+        f += 0.5000 * noise(p); p *= 2.02;
+        f += 0.2500 * noise(p); p *= 2.03;
+        f += 0.1250 * noise(p); p *= 2.01;
+        f += 0.0625 * noise(p);
+        return f / 0.9375;
+      }
+
+      float getWaveHeight(vec2 uv, float t) {
+        float wave = 0.0;
+        wave += sin(uv.x * 3.0 + t * 0.7) * 0.15;
+        wave += sin(uv.x * 5.2 - t * 1.3) * 0.08;
+        wave += sin(uv.x * 7.8 + t * 0.9) * 0.04;
+        wave += fbm(uv * 2.0 + vec2(t * 0.2, 0.0)) * 0.2;
+        return wave;
+      }
+
       void main() {
         vec2 uv = gl_FragCoord.xy / uResolution.xy;
-        float y = uv.y;
-        float time = uTime * 0.5;
+        uv.x *= uResolution.x / uResolution.y;
+        float time = uTime * 0.4;
 
-        vec3 sky = mix(vec3(0.02, 0.05, 0.15), vec3(0.1, 0.2, 0.5), y);
-        vec3 sea = mix(vec3(0.0, 0.05, 0.1), vec3(0.1, 0.3, 0.4), y);
+        // Sun
+        vec3 sunDir = normalize(vec3(0.8, 0.6, 0.3));
+        vec3 sunColor = vec3(1.0, 0.9, 0.7);
 
-        float wave1 = sin(uv.x * 8.0 + time) * 0.05;
-        float wave2 = sin(uv.x * 12.0 - time * 1.5) * 0.03;
-        float waveOffset = wave1 + wave2;
+        // Sky gradient with sun glow
+        float skyY = uv.y;
+        vec3 skyTop = vec3(0.02, 0.05, 0.18);
+        vec3 skyBot = vec3(0.4, 0.5, 0.7);
+        vec3 sky = mix(vec3(0.15, 0.2, 0.35), skyTop, smoothstep(0.0, 0.5, skyY));
+        float sunGlow = exp(-length(uv - vec2(1.0, 0.6)) * 3.0);
+        sky += sunColor * sunGlow * 0.5;
+        vec3 skyBelow = mix(skyBot, sky, smoothstep(0.3, 0.5, skyY));
 
-        float horizon = 0.5 + waveOffset;
-        vec3 color = mix(sea, sky, smoothstep(horizon - 0.05, horizon + 0.05, y));
+        // Ocean surface
+        float waveH = getWaveHeight(uv, time);
+        float horizonY = 0.5 + waveH * 0.3;
+        float waterDepth = horizonY - uv.y;
 
-        float foam = smoothstep(0.48, 0.52, y + waveOffset * 0.5) * (1.0 - smoothstep(0.52, 0.58, y));
-        color = mix(color, vec3(0.7, 0.8, 0.9), foam * 0.3);
+        // Ocean base colors with depth
+        vec3 deepOcean = vec3(0.01, 0.04, 0.08);
+        vec3 midOcean = vec3(0.03, 0.1, 0.2);
+        vec3 shallowOcean = vec3(0.05, 0.15, 0.3);
+
+        // Fresnel - more reflection at grazing angles
+        float fresnel = pow(1.0 - smoothstep(0.3, 0.7, uv.y), 3.0);
+
+        // Reflection of sky
+        float reflY = 1.0 - uv.y;
+        vec3 skyRefl = mix(skyBot, skyTop, smoothstep(0.0, 0.5, reflY));
+        sunGlow = exp(-length(vec2(reflY, uv.x - 1.0) * 2.0) * 3.0);
+        skyRefl += sunColor * sunGlow * 0.3;
+
+        // Wave normals from height field differences
+        float eps = 0.005;
+        float h = getWaveHeight(uv, time);
+        float hx = getWaveHeight(uv + vec2(eps, 0.0), time);
+        float hy = getWaveHeight(uv + vec2(0.0, eps), time);
+        vec3 normal = normalize(vec3(h - hx, h - hy, eps));
+
+        // Specular from sun
+        vec3 viewDir = vec3(0.0, 0.0, 1.0);
+        vec3 halfVec = normalize(sunDir + viewDir);
+        float spec = pow(max(dot(normal, halfVec), 0.0), 128.0);
+        float spec2 = pow(max(dot(normal, halfVec), 0.0), 16.0);
+
+        // Foam on wave peaks
+        float foam = smoothstep(0.0, 0.1, waterDepth) * (1.0 - smoothstep(0.0, 0.3, waterDepth));
+        foam *= smoothstep(0.45, 0.55, skyY + waveH * 0.5) * 0.5;
+
+        // Combine ocean
+        vec3 oceanCol = mix(deepOcean, midOcean, smoothstep(0.0, 0.2, waterDepth));
+        oceanCol = mix(oceanCol, shallowOcean, smoothstep(0.1, 0.3, waterDepth));
+        oceanCol = mix(oceanCol, skyRefl, fresnel * 0.7);
+        oceanCol += sunColor * spec * 0.8;
+        oceanCol += sunColor * spec2 * 0.3;
+
+        // Foam
+        oceanCol = mix(oceanCol, vec3(0.8, 0.85, 0.9), foam);
+
+        // Atmospheric haze
+        float haze = exp(-waterDepth * 5.0) * 0.3;
+        oceanCol = mix(oceanCol, skyBelow, haze);
+
+        // Sun path on water
+        float sunPath = exp(-pow(uv.x - 1.0, 2.0) * 10.0) * exp(-waterDepth * 3.0);
+        oceanCol += sunColor * sunPath * 0.4;
+
+        // Final composition
+        vec3 color = mix(oceanCol, sky, smoothstep(horizonY - 0.02, horizonY + 0.02, uv.y));
+
+        // Vignette
+        vec2 v = uv - vec2(0.5 * uResolution.x / uResolution.y, 0.5);
+        color *= 1.0 - dot(v, v) * 0.3;
 
         gl_FragColor = vec4(color, 1.0);
       }
