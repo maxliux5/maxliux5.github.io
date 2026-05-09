@@ -270,39 +270,40 @@ export default function BackgroundEffect() {
 
         float t = uTime * 0.4;
 
-        // Sun direction
-        vec3 sunDir = normalize(vec3(0.5, 0.8, 0.3));
+        // Sun direction - from upper right
+        vec3 sunDir = normalize(vec3(0.6, 0.8, 0.2));
         vec3 sunCol = vec3(1.0, 0.95, 0.8);
 
-        // Sky
+        // Sky - bright daytime
         float skyY = uv.y;
-        vec3 skyTop = vec3(0.02, 0.05, 0.12);
-        vec3 skyBot = vec3(0.2, 0.35, 0.55);
-        vec3 sky = mix(skyBot, skyTop, smoothstep(0.0, 0.5, skyY));
+        vec3 skyTop = vec3(0.3, 0.55, 0.85);
+        vec3 skyBot = vec3(0.6, 0.75, 0.9);
+        vec3 sky = mix(skyBot, skyTop, smoothstep(0.0, 0.6, skyY));
 
         // Sun glow in sky
-        vec2 sunPos = vec2(0.3, 0.6);
+        vec2 sunPos = vec2(0.35, 0.65);
         float sunDist = length(uv - sunPos);
-        float sunGlow = exp(-sunDist * sunDist * 8.0);
-        sky += sunCol * sunGlow * 0.3;
+        float sunGlow = exp(-sunDist * sunDist * 6.0);
+        sky += sunCol * sunGlow * 0.5;
+        sky += vec3(1.0, 0.9, 0.7) * pow(max(1.0 - sunDist * 3.0, 0.0), 8.0) * 0.3;
 
         // Wave height for horizon
         float waveH = waveHeight(p, t);
-        float horizon = 0.5 + waveH * 0.3;
+        float horizon = 0.5 + waveH * 0.25;
 
-        // Distance from horizon
+        // Distance from horizon (positive = below water)
         float waterDist = horizon - uv.y;
 
-        // Water depth gradient
-        vec3 deepWater = vec3(0.01, 0.03, 0.06);
-        vec3 midWater = vec3(0.03, 0.08, 0.15);
-        vec3 shallowWater = vec3(0.06, 0.15, 0.25);
+        // Water depth gradient - bright daytime ocean
+        vec3 deepWater = vec3(0.0, 0.08, 0.18);
+        vec3 midWater = vec3(0.02, 0.15, 0.35);
+        vec3 shallowWater = vec3(0.05, 0.25, 0.5);
 
-        vec3 waterCol = mix(shallowWater, midWater, smoothstep(0.0, 0.1, waterDist));
-        waterCol = mix(waterCol, deepWater, smoothstep(0.1, 0.3, waterDist));
+        vec3 waterCol = mix(shallowWater, midWater, smoothstep(0.0, 0.08, waterDist));
+        waterCol = mix(waterCol, deepWater, smoothstep(0.08, 0.25, waterDist));
 
         // Wave normals from height differences
-        float eps = 0.01;
+        float eps = 0.008;
         float h = waveHeight(p, t);
         float hx = waveHeight(p + vec2(eps, 0.0), t);
         float hy = waveHeight(p + vec2(0.0, eps), t);
@@ -313,41 +314,45 @@ export default function BackgroundEffect() {
 
         // Reflection of sky on water
         vec3 reflSky = mix(skyBot, skyTop, smoothstep(0.0, 0.5, 1.0 - uv.y));
-        reflSky += sunCol * exp(-pow(uv.x - sunPos.x, 2.0) * 10.0) * exp(-(1.0 - uv.y) * 3.0) * 0.2;
+        // Sun path on water
+        float sunPath = exp(-pow(uv.x - sunPos.x, 2.0) * 15.0) * exp(-(1.0 - uv.y) * 2.0);
+        reflSky += sunCol * sunPath * 0.3;
 
-        // Specular highlights
+        // Specular highlights - sharp sun glints
         vec3 viewDir = vec3(0.0, 0.0, 1.0);
         vec3 halfVec = normalize(sunDir + viewDir);
-        float spec = pow(max(dot(normal, halfVec), 0.0), 128.0);
-        float spec2 = pow(max(dot(normal, halfVec), 0.0), 32.0);
+        float spec = pow(max(dot(normal, halfVec), 0.0), 256.0);
+        float spec2 = pow(max(dot(normal, halfVec), 0.0), 64.0);
+        float specBroad = pow(max(dot(normal, halfVec), 0.0), 16.0);
 
         // Combine water
-        waterCol = mix(waterCol, reflSky, fresnel * 0.6);
-        waterCol += sunCol * spec * 0.8;
-        waterCol += sunCol * spec2 * 0.3;
+        waterCol = mix(waterCol, reflSky, fresnel * 0.5);
+        waterCol += sunCol * spec * 1.5;          // Sharp glints
+        waterCol += sunCol * spec2 * 0.6;         // Medium glints
+        waterCol += vec3(0.8, 0.85, 0.9) * specBroad * 0.3;  // Broad shimmer
 
         // Subsurface scattering glow
-        float sss = pow(max(dot(viewDir, -sunDir), 0.0), 4.0) * smoothstep(0.0, 0.2, waterDist);
-        waterCol += vec3(0.05, 0.1, 0.15) * sss;
+        float sss = pow(max(dot(viewDir, -sunDir), 0.0), 4.0) * smoothstep(0.0, 0.15, waterDist);
+        waterCol += vec3(0.1, 0.2, 0.3) * sss * 0.5;
 
         // Horizon glow
-        float horizonGlow = exp(-waterDist * waterDist * 200.0) * 0.3;
+        float horizonGlow = exp(-waterDist * waterDist * 300.0) * 0.4;
         waterCol += skyBot * horizonGlow;
 
         // Foam on crests
-        float foam = smoothstep(0.48, 0.52, uv.y + waveH * 0.5) * (1.0 - smoothstep(0.52, 0.58, uv.y));
-        waterCol = mix(waterCol, vec3(0.8, 0.85, 0.9), foam * 0.3);
+        float foam = smoothstep(0.45, 0.5, uv.y + waveH * 0.5) * (1.0 - smoothstep(0.5, 0.55, uv.y));
+        waterCol = mix(waterCol, vec3(0.85, 0.9, 0.95), foam * 0.4);
 
         // Atmospheric haze/mist near horizon
-        float haze = exp(-waterDist * 5.0) * 0.2;
+        float haze = exp(-waterDist * 8.0) * 0.15;
         waterCol = mix(waterCol, sky, haze);
 
         // Final composition
-        vec3 col = mix(waterCol, sky, smoothstep(horizon - 0.02, horizon + 0.02, uv.y));
+        vec3 col = mix(waterCol, sky, smoothstep(horizon - 0.015, horizon + 0.015, uv.y));
 
         // Vignette
         vec2 v = uv - 0.5;
-        col *= 1.0 - dot(v, v) * 0.3;
+        col *= 1.0 - dot(v, v) * 0.2;
 
         gl_FragColor = vec4(col, 1.0);
       }
